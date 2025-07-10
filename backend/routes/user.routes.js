@@ -39,12 +39,10 @@ router.post("/signup", async (req, res) => {
 
   await Accounts.create({
     userId: dbUser._id,
-    balance: 1 + Math.random() * 10000,
+    balance: +(Math.random() * 10000 + 1).toFixed(2),
   });
 
-  const token = jwt.sign({ userId: dbUser._id }, JWT_SECRET, {
-    expiresIn: "1h",
-  });
+  const token = jwt.sign({ userId: dbUser._id }, JWT_SECRET);
 
   return res.status(201).json({
     message: "User created successfully",
@@ -90,28 +88,50 @@ router.put("/update", authMiddleware, async (req, res) => {
     res.status(403).json({ message: "error updating information" });
   }
 
-  await User.updateOne(req, body, { id: req.userId });
+  await User.updateOne(req.body, { id: req.userId });
   res.json({
     message: "updated successfully",
   });
 });
 
 //finding users route
-router.get("/bulk", async (req, res) => {
+router.get("/bulk", authMiddleware, async (req, res) => {
   const filter = req.query.filter || "";
 
   const users = await User.find({
     $or: [{ firstName: { $regex: filter } }, { lastName: { $regex: filter } }],
   });
 
+  const currUser = req.userId;
+
   return res.json({
-    user: users.map((user) => ({
+    user: users
+      .filter((user) => String(user._id) !== String(currUser))
+      .map((user) => ({
+        username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        _id: user._id,
+      })),
+  });
+});
+
+router.get("/me", authMiddleware, async (req, res) => {
+  try {
+    const id = req.userId;
+    const user = await User.findOne({
+      _id: id,
+    });
+
+    res.status(200).json({
       username: user.username,
       firstName: user.firstName,
       lastName: user.lastName,
       _id: user._id,
-    })),
-  });
+    });
+  } catch (error) {
+    console.log("error getting user details :", error);
+  }
 });
 
 export default router;
